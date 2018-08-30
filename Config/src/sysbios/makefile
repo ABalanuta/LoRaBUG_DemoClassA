@@ -16,11 +16,11 @@ BIOS_INC  = -I"/Applications/ti/tirtos_cc13xx_cc26xx_2_21_00_06/products/bios_6_
 
 TARGET_INC = -I"/Applications/ti/tirtos_cc13xx_cc26xx_2_21_00_06/products/bios_6_46_01_37/packages/"
 
-INCS = $(BIOS_INC) $(TARGET_INC)  --include_path="/Users/artur/git/LoRaBUG_DemoClassA/Config" --include_path="/Users/artur/git/LoRaBUG_DemoClassA" --include_path="/Users/artur/git/LoRaBUG_DemoClassA" --include_path="/Applications/ti/tirtos_cc13xx_cc26xx_2_21_00_06/products/cc26xxware_2_24_03_17272" --include_path="/Applications/ti/ccsv7/tools/compiler/ti-cgt-arm_5.2.9/include" --include_path="/Users/artur/git/LoRaBUG_DemoClassA/Libs" --include_path="/Users/artur/git/LoRaBUG_DemoClassA/LoRaMac-node/src/mac" --include_path="/Users/artur/git/LoRaBUG_DemoClassA/LoRaMac-node/src/radio" --include_path="/Users/artur/git/LoRaBUG_DemoClassA/LoRaMac-node/src/boards/LoRaBug" --include_path="/Users/artur/git/LoRaBUG_DemoClassA/LoRaMac-node/src/system/crypto" 
+INCS = $(BIOS_INC) $(TARGET_INC)  --include_path="/Users/artur/git/LoRaBUG_UnderControl/Config" --include_path="/Users/artur/git/LoRaBUG_UnderControl" --include_path="/Users/artur/git/LoRaBUG_UnderControl" --include_path="/Applications/ti/tirtos_cc13xx_cc26xx_2_21_00_06/products/cc26xxware_2_24_03_17272" --include_path="/Applications/ti/ccsv8/tools/compiler/ti-cgt-arm_5.2.9/include" --include_path="/Users/artur/git/LoRaBUG_UnderControl/Libs" --include_path="/Users/artur/git/LoRaBUG_UnderControl/LoRaMac-node/src/mac" --include_path="/Users/artur/git/LoRaBUG_UnderControl/LoRaMac-node/src/radio" --include_path="/Users/artur/git/LoRaBUG_UnderControl/LoRaMac-node/src/boards/LoRaBug" --include_path="/Users/artur/git/LoRaBUG_UnderControl/LoRaMac-node/src/system/crypto" 
 
-CC = /Applications/ti/ccsv7/tools/compiler/ti-cgt-arm_5.2.9/bin/armcl -c $(CCOPTS) -I /Applications/ti/ccsv7/tools/compiler/ti-cgt-arm_5.2.9/include
-ASM = /Applications/ti/ccsv7/tools/compiler/ti-cgt-arm_5.2.9/bin/armcl -c $(CCOPTS) -I /Applications/ti/ccsv7/tools/compiler/ti-cgt-arm_5.2.9/include
-AR = /Applications/ti/ccsv7/tools/compiler/ti-cgt-arm_5.2.9/bin/armar rq
+CC = /Applications/ti/ccsv8/tools/compiler/ti-cgt-arm_5.2.9/bin/armcl -c $(CCOPTS) -I /Applications/ti/ccsv8/tools/compiler/ti-cgt-arm_5.2.9/include
+ASM = /Applications/ti/ccsv8/tools/compiler/ti-cgt-arm_5.2.9/bin/armcl -c $(CCOPTS) -I /Applications/ti/ccsv8/tools/compiler/ti-cgt-arm_5.2.9/include
+AR = /Applications/ti/ccsv8/tools/compiler/ti-cgt-arm_5.2.9/bin/armar rq
 
 DEL = rm -f
 CP = cp -f
@@ -53,7 +53,7 @@ m3_TaskSupport_asm.obj: family/arm/m3/TaskSupport_asm.sv7M makefile
 	$(ASSEMBLE) --output_file=m3_TaskSupport_asm.obj
 
 
-BIOS.obj: BIOS.c knl/Clock.c knl/Idle.c knl/Intrinsics.c knl/Event.c knl/Mailbox.c knl/Queue.c knl/Semaphore.c knl/Swi.c knl/Swi_andn.c knl/Task.c family/arm/m3/Hwi.c family/arm/m3/TaskSupport.c family/arm/cc26xx/Boot.c family/arm/cc26xx/Timer.c hal/Core.c hal/CoreNull.c hal/Hwi.c hal/Hwi_stack.c hal/Hwi_startup.c gates/GateHwi.c gates/GateMutexPri.c gates/GateMutex.c heaps/HeapMem.c xdc/runtime/xdc_noinit.c xdc/runtime/Assert.c xdc/runtime/Core-mem.c xdc/runtime/Core-smem.c xdc/runtime/Core-label.c xdc/runtime/Core-params.c xdc/runtime/Diags.c xdc/runtime/Error.c xdc/runtime/Gate.c xdc/runtime/Log.c xdc/runtime/Memory.c xdc/runtime/Registry.c xdc/runtime/Startup.c xdc/runtime/System.c xdc/runtime/SysMin.c xdc/runtime/Text.c makefile
+BIOS.obj: BIOS.c knl/Clock.c knl/Idle.c knl/Intrinsics.c knl/Event.c knl/Mailbox.c knl/Queue.c knl/Semaphore.c knl/Swi.c knl/Swi_andn.c knl/Task.c family/arm/m3/Hwi.c family/arm/m3/TaskSupport.c family/arm/cc26xx/Boot.c family/arm/cc26xx/Seconds.c family/arm/cc26xx/Timer.c hal/Core.c hal/CoreNull.c hal/Hwi.c hal/Hwi_stack.c hal/Hwi_startup.c hal/Seconds.c gates/GateHwi.c gates/GateMutexPri.c gates/GateMutex.c heaps/HeapMem.c xdc/runtime/xdc_noinit.c xdc/runtime/Assert.c xdc/runtime/Core-mem.c xdc/runtime/Core-smem.c xdc/runtime/Core-label.c xdc/runtime/Core-params.c xdc/runtime/Diags.c xdc/runtime/Error.c xdc/runtime/Gate.c xdc/runtime/Log.c xdc/runtime/Memory.c xdc/runtime/Registry.c xdc/runtime/Startup.c xdc/runtime/System.c xdc/runtime/SysMin.c xdc/runtime/Text.c makefile
 	@-$(call RM, $@)
 	@echo clem3 $< ...
 	@$(CC) $(BIOS_DEFS) $(XOPTS) $(INCS) \
@@ -71,12 +71,14 @@ BIOS.obj: BIOS.c knl/Clock.c knl/Idle.c knl/Intrinsics.c knl/Event.c knl/Mailbox
 	$(BIOS_ROOT)family/arm/m3/Hwi.c \
 	$(BIOS_ROOT)family/arm/m3/TaskSupport.c \
 	$(BIOS_ROOT)family/arm/cc26xx/Boot.c \
+	$(BIOS_ROOT)family/arm/cc26xx/Seconds.c \
 	$(BIOS_ROOT)family/arm/cc26xx/Timer.c \
 	$(BIOS_ROOT)hal/Core.c \
 	$(BIOS_ROOT)hal/CoreNull.c \
 	$(BIOS_ROOT)hal/Hwi.c \
 	$(BIOS_ROOT)hal/Hwi_stack.c \
 	$(BIOS_ROOT)hal/Hwi_startup.c \
+	$(BIOS_ROOT)hal/Seconds.c \
 	$(BIOS_ROOT)gates/GateHwi.c \
 	$(BIOS_ROOT)gates/GateMutexPri.c \
 	$(BIOS_ROOT)gates/GateMutex.c \

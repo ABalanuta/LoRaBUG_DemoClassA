@@ -8,6 +8,7 @@
 #include <ti/sysbios/BIOS.h>
 #include <ti/sysbios/knl/Task.h>
 #include <ti/sysbios/knl/Clock.h>
+#include <ti/sysbios/knl/Event.h>
 
 /* TI-RTOS Header files */
 // #include <ti/drivers/I2C.h>
@@ -29,11 +30,22 @@
 
 #include "LoRaMac.h"
 
+#include <ti/sysbios/hal/Seconds.h>
+#include <time.h>
+
+#include "cc.h" //command and control libraries
+
+
+
 #define TASKSTACKSIZE   2048
 
 Task_Struct task0Struct;
 Char task0Stack[TASKSTACKSIZE];
 
+/* Runtime Events */
+#define EVENT_STATECHANGE Event_Id_00
+static Event_Struct runtimeEventsStruct;
+static Event_Handle runtimeEvents;
 
 /*------------------------------------------------------------------------*/
 /*                      Start of LoRaWan Demo Code                        */
@@ -42,14 +54,15 @@ Char task0Stack[TASKSTACKSIZE];
 /*!
  * Defines the application data transmission duty cycle. 15s, value in [ms].
  */
-#define APP_TX_DUTYCYCLE                            5000
+//#define APP_TX_DUTYCYCLE                            60000
+volatile static Uint32 APP_TX_DUTYCYCLE = 60000;
 
 /*!
  * Defines a random delay for application data transmission duty cycle. 2s,
  * value in [ms].
  */
-#define APP_TX_DUTYCYCLE_RND                        1000
-
+//#define APP_TX_DUTYCYCLE_RND                        0000
+volatile static Uint32 APP_TX_DUTYCYCLE_RND = 0;
 /*!
  * Default datarate
  */
@@ -59,19 +72,19 @@ Char task0Stack[TASKSTACKSIZE];
 /*!
  * LoRaWAN confirmed messages
  */
-#define LORAWAN_CONFIRMED_MSG_ON                    false
+#define LORAWAN_CONFIRMED_MSG_ON                    true
 
 /*!
  * LoRaWAN Adaptive Data Rate
  *
  * \remark Please note that when ADR is enabled the end-device should be static
  */
-#define LORAWAN_ADR_ON                              1
+#define LORAWAN_ADR_ON                              0
 
 /*!
  * LoRaWAN application port
  */
-#define LORAWAN_APP_PORT                            2
+#define LORAWAN_APP_PORT                            100
 
 /*!
  * User application data buffer size BAND_915
@@ -183,6 +196,17 @@ struct ComplianceTest_s
     uint8_t NbGateways;
 }ComplianceTest;
 
+
+struct ExperimentTest_s
+{
+    bool Running;
+    bool ClockInicialized;
+    Uint32 DutyCycle;
+    Uint8 CommandReceived;
+
+}ExperimentTest;
+
+
 /*!
  * \brief   Prepares the payload of the frame
  */
@@ -191,31 +215,41 @@ static void PrepareTxFrame( uint8_t port )
     static uint32_t counter = 0;
     uint32_t batteryVoltage = 0;
     uint8_t	batteryLevel = 0;
+    AppDataSize = 0;
 
-    //printf("# PrepareTxFrame\n");
+    uartprintf("# PrepareTxFrame for Port %d\r\n", port);
 
     switch( port )
     {
     case 2:
+    batteryVoltage = BoardGetBatteryVoltage();
+    batteryLevel = BoardGetBatteryLevel();
 
-    	batteryVoltage = BoardGetBatteryVoltage();
-    	batteryLevel = BoardGetBatteryLevel();
+    memset(AppData, '\0', sizeof(AppData));
 
-    	memset(AppData, '\0', sizeof(AppData));
+    // Copy Counter
+    memcpy(AppData, &counter, sizeof(counter));
+    AppDataSize += sizeof(counter);
+    counter++;
 
-    	// Copy Counter
-    	memcpy(AppData, &counter, sizeof(counter));
-        AppDataSize = sizeof(counter);
-        counter++;
+    // Copy Battery Voltage
+    memcpy(AppData + AppDataSize, &batteryVoltage, sizeof(batteryVoltage));
+    AppDataSize += sizeof(batteryVoltage);
 
-        // Copy Battery Voltage
-        memcpy(AppData + AppDataSize, &batteryVoltage, sizeof(batteryVoltage));
-        AppDataSize += sizeof(batteryVoltage);
+    // Copy Battery Level
+    memcpy(AppData + AppDataSize, &batteryLevel, sizeof(batteryLevel));
+    AppDataSize += sizeof(batteryLevel);
 
-        // Copy Battery Level
-        memcpy(AppData + AppDataSize, &batteryLevel, sizeof(batteryLevel));
-        AppDataSize += sizeof(batteryLevel);
+    break;
 
+    // Default Experiment Port
+    case 100:
+        // Default Init Clock Request
+        if ( !ExperimentTest.ClockInicialized ) {
+            Seconds_set((xdc_UInt32)0);
+            uartputs("### Requesting Time !");
+         }
+        AppDataSize = 1;
         break;
 
     case 224:
@@ -322,6 +356,7 @@ static void OnTxNextPacketTimerEvent( void )
             DeviceState = DEVICE_STATE_JOIN;
         }
     }
+    Event_post(runtimeEvents, EVENT_STATECHANGE);
 }
 
 /*!
@@ -365,16 +400,20 @@ static void OnLed4TimerEvent( void )
 static void McpsConfirm( McpsConfirm_t *mcpsConfirm )
 {
     //printf("# McpsConfirm\n");
-    uartputs("# McpsConfirm\n");
+    //uartputs("# McpsConfirm");
     if( mcpsConfirm->Status == LORAMAC_EVENT_INFO_STATUS_OK )
     {
+
+        uartprintf("# McpsConfirm ReqType:%d UpCounter:%d \r\n", mcpsConfirm->McpsRequest, mcpsConfirm->UpLinkCounter);
+
         switch( mcpsConfirm->McpsRequest )
         {
             case MCPS_UNCONFIRMED:
             {
                 // Check Datarate
                 // Check TxPower
-                uartputs("# Got McpsConfirm: MCPS_UNCONFIRMED\n");
+                //uartputs("# Got McpsConfirm: MCPS_UNCONFIRMED\n");
+
                 break;
             }
             case MCPS_CONFIRMED:
@@ -383,7 +422,7 @@ static void McpsConfirm( McpsConfirm_t *mcpsConfirm )
                 // Check TxPower
                 // Check AckReceived
                 // Check NbTrials
-                uartputs("# Got McpsConfirm: MCPS_CONFIRMED\n");
+                //uartputs("# Got McpsConfirm: MCPS_CONFIRMED");
                 break;
             }
             case MCPS_PROPRIETARY:
@@ -399,7 +438,14 @@ static void McpsConfirm( McpsConfirm_t *mcpsConfirm )
         setLed(Board_GLED, 1);
         TimerStart( &Led1Timer );
     }
+    else{
+        uartprintf("!! McpsConfirm LoRaMAC %d Error\r\n", mcpsConfirm->Status);
+        //DeviceState = DEVICE_STATE_JOIN;
+        //NextTx = false;
+    }
+
     NextTx = true;
+    Event_post(runtimeEvents, EVENT_STATECHANGE);
 }
 
 /*!
@@ -410,31 +456,42 @@ static void McpsConfirm( McpsConfirm_t *mcpsConfirm )
  */
 static void McpsIndication( McpsIndication_t *mcpsIndication )
 {
-    //printf("# McpsIndication\n");
+    //uartputs("# McpsIndication");
     if( mcpsIndication->Status != LORAMAC_EVENT_INFO_STATUS_OK )
     {
+        uartprintf("!! Got McpsIndication Error, Event:%d\r\n",mcpsIndication->Status);
         return;
     }
+
+    uartprintf("### Got McpsIndication Type:%d  \r\n",mcpsIndication->McpsIndication);
+    uartprintf("### Received %d bytes on Port %d \r\n", mcpsIndication->BufferSize, mcpsIndication->Port);
+    if (mcpsIndication->BufferSize > 0) uarthexdump(mcpsIndication->Buffer, mcpsIndication->BufferSize);
 
     switch( mcpsIndication->McpsIndication )
     {
         case MCPS_UNCONFIRMED:
         {
-            uartputs("# Got McpsIndication: MCPS_UNCONFIRMED\n");
+//            uartputs("# Got McpsIndication: MCPS_UNCONFIRMED");
             break;
         }
         case MCPS_CONFIRMED:
         {
-            uartputs("# Got McpsIndication: MCPS_CONFIRMED\n");
+//            uartputs("# Got McpsIndication: MCPS_CONFIRMED");
+
             break;
         }
         case MCPS_PROPRIETARY:
         {
+//            uartputs("# Got McpsIndication: MCPS_PROPRIETARY");
             break;
+
+
         }
         case MCPS_MULTICAST:
         {
+//            uartputs("# Got McpsIndication: MCPS_MULTICAST");
             break;
+
         }
         default:
             break;
@@ -449,6 +506,8 @@ static void McpsIndication( McpsIndication_t *mcpsIndication )
     // Check Rssi
     // Check Snr
     // Check RxSlot
+
+    UInt32 tempUInt32 = 0;
 
     if( ComplianceTest.Running == true )
     {
@@ -468,6 +527,80 @@ static void McpsIndication( McpsIndication_t *mcpsIndication )
                 setLed(Board_RLED, ( ( AppLedStateOn & 0x01 ) != 0 ) ? 1 : 0);
             }
             break;
+
+        // Set the Current Time and send it back
+        case 100:
+            memcpy(&tempUInt32, mcpsIndication->Buffer, sizeof(tempUInt32));
+            uartprintf("### Seconds %d \r\n", tempUInt32);
+            Seconds_set((xdc_UInt32)tempUInt32);
+            ExperimentTest.ClockInicialized = true;
+            print_clock();
+
+            uartputs("### Sending Ack");
+            AppDataSize = 0;
+            ExperimentTest.CommandReceived = mcpsIndication->Port;
+            memset(AppData, '\0', sizeof(AppData));
+            memcpy(AppData + AppDataSize, &ExperimentTest.CommandReceived, sizeof(ExperimentTest.CommandReceived));
+            AppDataSize += sizeof(ExperimentTest.CommandReceived);
+
+            tempUInt32 = Seconds_get();
+            memcpy(AppData + AppDataSize, &tempUInt32, sizeof(tempUInt32));
+            AppDataSize += sizeof(tempUInt32);
+
+            AppPort = 200;
+            NextTx = SendFrame( );
+            AppPort = LORAWAN_APP_PORT;
+            break;
+
+        // Received a ping must ack
+        case 101:
+            uartputs("### Sending Ack");
+            AppDataSize = 0;
+            ExperimentTest.CommandReceived = mcpsIndication->Port;
+            memset(AppData, '\0', sizeof(AppData));
+            memcpy(AppData + AppDataSize, &ExperimentTest.CommandReceived, sizeof(ExperimentTest.CommandReceived));
+            AppDataSize += sizeof(ExperimentTest.CommandReceived);
+
+            // Add RSSI
+            memcpy(AppData + AppDataSize, &(mcpsIndication->Rssi), 2);
+            AppDataSize += 2;
+            // Add SNR
+            memcpy(AppData + AppDataSize, &(mcpsIndication->Snr), 1);
+            AppDataSize += 1;
+
+            AppPort = 200;
+            NextTx = SendFrame( );
+            AppPort = LORAWAN_APP_PORT;
+            break;
+
+        // Change Update Rate
+        case 102:
+            memcpy(&tempUInt32, mcpsIndication->Buffer, sizeof(tempUInt32));
+            uartprintf("### UpdateRate is now %d seconds \r\n", tempUInt32);
+
+            ExperimentTest.DutyCycle = tempUInt32 * 1000;
+            ExperimentTest.Running = true;
+            APP_TX_DUTYCYCLE = tempUInt32 * 1000;
+
+            uartputs("### Sending Ack");
+            AppDataSize = 0;
+            ExperimentTest.CommandReceived = mcpsIndication->Port;
+            memset(AppData, '\0', sizeof(AppData));
+            memcpy(AppData + AppDataSize, &ExperimentTest.CommandReceived, sizeof(ExperimentTest.CommandReceived));
+            AppDataSize += sizeof(ExperimentTest.CommandReceived);
+
+            memcpy(AppData + AppDataSize, &tempUInt32, sizeof(tempUInt32));
+            AppDataSize += sizeof(tempUInt32);
+
+            AppPort = 200;
+            NextTx = SendFrame( );
+            AppPort = LORAWAN_APP_PORT;
+            break;
+
+        // Device
+        case 103:
+            break;
+
         case 224:
             if( ComplianceTest.Running == false )
             {
@@ -591,6 +724,8 @@ static void McpsIndication( McpsIndication_t *mcpsIndication )
 //    GpioWrite( &Led2, 0 );
     setLed(Board_RLED, 1);
     TimerStart( &Led2Timer );
+
+    Event_post(runtimeEvents, EVENT_STATECHANGE);
 }
 
 /*!
@@ -601,18 +736,18 @@ static void McpsIndication( McpsIndication_t *mcpsIndication )
  */
 static void MlmeConfirm( MlmeConfirm_t *mlmeConfirm )
 {
-    //printf("# MlmeConfirm\n");
+    uartputs("# MlmeConfirm");
     switch( mlmeConfirm->MlmeRequest )
     {
         case MLME_JOIN:
         {
             //printf("# MlmeConfirm: Join\n");
-            uartputs("# McpsConfirm: Join\n");
+            uartputs("# MlmeConfirm: Join");
             if( mlmeConfirm->Status == LORAMAC_EVENT_INFO_STATUS_OK )
             {
                 // Status is OK, node has joined the network
                 DeviceState = DEVICE_STATE_SEND;
-                uartputs("# McpsConfirm Joined\n");
+                uartputs("# MlmeConfirm: Joined");
             }
             else
             {
@@ -624,7 +759,7 @@ static void MlmeConfirm( MlmeConfirm_t *mlmeConfirm )
         case MLME_LINK_CHECK:
         {
             //printf("# MlmeConfirm: Link Check\n");
-            uartputs("# McpsConfirm: Link Check\n");
+            uartputs("# MlmeConfirm: Link Check");
             if( mlmeConfirm->Status == LORAMAC_EVENT_INFO_STATUS_OK )
             {
                 // Check DemodMargin
@@ -642,6 +777,7 @@ static void MlmeConfirm( MlmeConfirm_t *mlmeConfirm )
             break;
     }
     NextTx = true;
+    Event_post(runtimeEvents, EVENT_STATECHANGE);
 }
 
 void maintask(UArg arg0, UArg arg1)
@@ -653,7 +789,11 @@ void maintask(UArg arg0, UArg arg1)
     BoardInitMcu( );
     BoardInitPeriph( );
     //printf("# Board initialized\n");
-    uartputs("# Board initialized\n");
+    uartputs("# Board initialized");
+
+    // Construct event for power efficient operation
+    Event_construct(&runtimeEventsStruct, NULL);
+    runtimeEvents = Event_handle(&runtimeEventsStruct);
 
 
     DeviceState = DEVICE_STATE_INIT;
@@ -665,7 +805,7 @@ void maintask(UArg arg0, UArg arg1)
             case DEVICE_STATE_INIT:
             {
                 //printf("# DeviceState: DEVICE_STATE_INIT\n");
-                uartputs("# DeviceState: DEVICE_STATE_INIT\n");
+                uartputs("# DeviceState: DEVICE_STATE_INIT");
                 LoRaMacPrimitives.MacMcpsConfirm = McpsConfirm;
                 LoRaMacPrimitives.MacMcpsIndication = McpsIndication;
                 LoRaMacPrimitives.MacMlmeConfirm = MlmeConfirm;
@@ -691,13 +831,18 @@ void maintask(UArg arg0, UArg arg1)
                 mibReq.Param.EnablePublicNetwork = LORAWAN_PUBLIC_NETWORK;
                 LoRaMacMibSetRequestConfirm( &mibReq );
 
+                // Change device to Class C
+                mibReq.Type = MIB_DEVICE_CLASS;
+                mibReq.Param.Class = CLASS_C;
+                LoRaMacMibSetRequestConfirm( &mibReq );
+
                 DeviceState = DEVICE_STATE_JOIN;
                 break;
             }
             case DEVICE_STATE_JOIN:
             {
                 //printf("# DeviceState: DEVICE_STATE_JOIN\n");
-                uartputs("# DeviceState: DEVICE_STATE_JOIN\n");
+                uartputs("# DeviceState: DEVICE_STATE_JOIN");
 #if( OVER_THE_AIR_ACTIVATION != 0 )
                 MlmeReq_t mlmeReq;
 
@@ -754,29 +899,34 @@ void maintask(UArg arg0, UArg arg1)
             case DEVICE_STATE_SEND:
             {
                 //printf("# DeviceState: DEVICE_STATE_SEND\n");
-                uartputs("# DeviceState: DEVICE_STATE_SEND\n");
+                uartputs("# DeviceState: DEVICE_STATE_SEND");
+
+                //process();
+
+
                 if( NextTx == true )
                 {
                     PrepareTxFrame( AppPort );
-
                     NextTx = SendFrame( );
                 }
-                if( ComplianceTest.Running == true )
-                {
-                    // Schedule next packet transmission
-                    TxDutyCycleTime = 5000; // 5000 ms
-                }
-                else
-                {
+
+//                if( ComplianceTest.Running == true )
+//                {
+//                    // Schedule next packet transmission
+//                    TxDutyCycleTime = 5000; // 5000 ms
+//                }
+
+              //  else
+              //  {
                     // Schedule next packet transmission
                     TxDutyCycleTime = APP_TX_DUTYCYCLE + randr( -APP_TX_DUTYCYCLE_RND, APP_TX_DUTYCYCLE_RND );
-                }
+               // }
                 DeviceState = DEVICE_STATE_CYCLE;
                 break;
             }
             case DEVICE_STATE_CYCLE:
             {
-                uartputs("# DeviceState: DEVICE_STATE_CYCLE\n");
+                uartputs("# DeviceState: DEVICE_STATE_CYCLE");
                 DeviceState = DEVICE_STATE_SLEEP;
 
                 // Schedule next packet transmission
@@ -786,11 +936,12 @@ void maintask(UArg arg0, UArg arg1)
             }
             case DEVICE_STATE_SLEEP:
             {
-               // uartputs("# DeviceState: DEVICE_STATE_SLEEP\n");
+                //uartputs("# DeviceState: DEVICE_STATE_SLEEP");
                 // Wake up through events
 //                TimerLowPowerHandler( );
-                Task_sleep(TIME_MS * 10);
-//                Task_yield();
+                //Task_sleep(TIME_MS * 10);
+                //Task_yield();
+                Event_pend(runtimeEvents, Event_Id_NONE, EVENT_STATECHANGE, BIOS_WAIT_FOREVER);
                 break;
             }
             default:

@@ -1,0 +1,7 @@
+
+!CONFIGURATION: 'com.ti.ccstudio.buildDefinitions.TMS470.Debug.1652864317' [Thu Jul 12 16:51:32 EDT 2018]
+
+	!TOOL: 'com.ti.ccstudio.buildDefinitions.TMS470_5.2.exe.compilerDebug.1058222817'
+
+		!NOTE: Deprecated build flag '--float_support=vfplib' was migrated to ''.
+
