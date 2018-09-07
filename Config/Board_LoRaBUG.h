@@ -39,7 +39,7 @@ extern "C" {
 
 #include <ti/drivers/Power.h>
 
-#include "LORABUG_V3.1.h"
+#include "LORABUG.h"
 
 /* These #defines allow us to reuse TI-RTOS across other device families */
 #define     Board_LED0              Board_RLED
