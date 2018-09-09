@@ -1,0 +1,3 @@
+[submodule "loramac"]
+	path = loramac
+	url = https://github.com/ABalanuta/LoRaMac-node
