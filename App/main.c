@@ -34,6 +34,7 @@
 #include <time.h>
 
 #include "cc.h" //command and control libraries
+#include "raw_lora.h"
 
 
 
@@ -795,6 +796,8 @@ void maintask(UArg arg0, UArg arg1)
     Event_construct(&runtimeEventsStruct, NULL);
     runtimeEvents = Event_handle(&runtimeEventsStruct);
 
+    raw_init();
+    raw_test();
 
     DeviceState = DEVICE_STATE_INIT;
 
