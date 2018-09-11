@@ -96,18 +96,6 @@ static uint8_t DevEui[] = LORAWAN_DEVICE_EUI;
 static uint8_t AppEui[] = LORAWAN_APPLICATION_EUI;
 static uint8_t AppKey[] = LORAWAN_APPLICATION_KEY;
 
-#if( OVER_THE_AIR_ACTIVATION == 0 )
-
-static uint8_t NwkSKey[] = LORAWAN_NWKSKEY;
-static uint8_t AppSKey[] = LORAWAN_APPSKEY;
-
-/*!
- * Device address
- */
-static uint32_t DevAddr = LORAWAN_DEVICE_ADDRESS;
-
-#endif
-
 /*!
  * Application port
  */
@@ -683,7 +671,7 @@ void maintask(UArg arg0, UArg arg1)
             {
                 //printf("# DeviceState: DEVICE_STATE_JOIN\n");
                 uartputs("# DeviceState: DEVICE_STATE_JOIN");
-#if( OVER_THE_AIR_ACTIVATION != 0 )
+
                 MlmeReq_t mlmeReq;
 
                 // Initialize LoRaMac device unique ID
@@ -701,39 +689,6 @@ void maintask(UArg arg0, UArg arg1)
                     LoRaMacMlmeRequest( &mlmeReq );
                 }
                 DeviceState = DEVICE_STATE_SLEEP;
-#else
-                // Choose a random device address if not already defined in Commissioning.h
-                if( DevAddr == 0 )
-                {
-                    // Random seed initialization
-                    srand1( BoardGetRandomSeed( ) );
-
-                    // Choose a random device address
-                    DevAddr = randr( 0, 0x01FFFFFF );
-                }
-
-                mibReq.Type = MIB_NET_ID;
-                mibReq.Param.NetID = LORAWAN_NETWORK_ID;
-                LoRaMacMibSetRequestConfirm( &mibReq );
-
-                mibReq.Type = MIB_DEV_ADDR;
-                mibReq.Param.DevAddr = DevAddr;
-                LoRaMacMibSetRequestConfirm( &mibReq );
-
-                mibReq.Type = MIB_NWK_SKEY;
-                mibReq.Param.NwkSKey = NwkSKey;
-                LoRaMacMibSetRequestConfirm( &mibReq );
-
-                mibReq.Type = MIB_APP_SKEY;
-                mibReq.Param.AppSKey = AppSKey;
-                LoRaMacMibSetRequestConfirm( &mibReq );
-
-                mibReq.Type = MIB_NETWORK_JOINED;
-                mibReq.Param.IsNetworkJoined = true;
-                LoRaMacMibSetRequestConfirm( &mibReq );
-
-                DeviceState = DEVICE_STATE_SEND;
-#endif
                 break;
             }
             case DEVICE_STATE_SEND:
