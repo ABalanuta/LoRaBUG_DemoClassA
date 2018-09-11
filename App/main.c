@@ -549,6 +549,10 @@ static void McpsIndication( McpsIndication_t *mcpsIndication )
 
             AppPort = 200;
             NextTx = SendFrame( );
+
+            TxDutyCycleTime = APP_TX_DUTYCYCLE + randr( -APP_TX_DUTYCYCLE_RND, APP_TX_DUTYCYCLE_RND );
+            DeviceState = DEVICE_STATE_CYCLE;
+
             AppPort = LORAWAN_APP_PORT;
             break;
 
