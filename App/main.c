@@ -479,6 +479,9 @@ static void McpsIndication( McpsIndication_t *mcpsIndication )
             ExperimentTest.ClockInicialized = true;
             print_clock();
 
+            //enable Time Printing
+            setTimePrint(true);
+
             uartputs("### Sending Ack");
             AppDataSize = 0;
             ExperimentTest.CommandReceived = mcpsIndication->Port;

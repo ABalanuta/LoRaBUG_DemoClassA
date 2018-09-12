@@ -24,6 +24,8 @@
 
 #include <driverlib/sys_ctrl.h> // SysCtrlSystemReset()
 
+#include "../App/cc.h" // for time printing
+
 #define UART_PRINTF_BUFFER_SIZE 128 // SHould be at least 5+17 for uarthexdump
 #define UART_RECV_LINE_LENGTH 768
 #define HEXDUMP_STR_PREFIX "# " // Must be defined, but can be ""
@@ -45,6 +47,8 @@ static GateMutexPri_Struct uartMutexStruct;
 // Buffer for snprintf and uartwrite
 static char uartsbuf[UART_PRINTF_BUFFER_SIZE];
 static char uartlinebuf[UART_RECV_LINE_LENGTH+1]; // +1 for '\0'
+
+static bool printTime = false;
 
 /*
  * Application LED pin configuration table:
@@ -75,6 +79,8 @@ PIN_Config btnPinTable[] = {
     Board_BTN | PIN_INPUT_EN | PIN_NOPULL | PIN_IRQ_NEGEDGE,
     PIN_TERMINATE
 };
+
+void setTimePrint(bool en);
 
 /**
  * Do a system hard reset when triggered
@@ -156,6 +162,14 @@ void uartputs(const char *str)
     if (!uartHandle) return;
 
     IArg key = GateMutexPri_enter(GateMutexPri_handle(&uartMutexStruct));
+
+    if (printTime) {
+        char* t = getTimeStr();
+        if (strlen(t) && UART_write(uartHandle, t, strlen(t)-1) == UART_ERROR)
+        {
+            System_abort("Failed to write str to uart\n");
+        }
+    }
     if (strlen(str) && UART_write(uartHandle, str, strlen(str)) == UART_ERROR)
     {
         System_abort("Failed to write str to uart\n");
@@ -176,6 +190,14 @@ void uartprintf(const char *format, ...)
     va_start (args, format);
     vsnprintf(uartsbuf, sizeof(uartsbuf), format, args);
     va_end(args);
+
+    if (printTime) {
+        char* t = getTimeStr();
+        if (strlen(t) && UART_write(uartHandle, t, strlen(t)-1) == UART_ERROR)
+        {
+            System_abort("Failed to write str to uart\n");
+        }
+    }
 
     if (UART_write(uartHandle, uartsbuf, strlen(uartsbuf)) == UART_ERROR)
     {
@@ -275,6 +297,11 @@ void uarthexdump(uint8_t *data, size_t size) {
     char ascii[17];
     size_t i, j;
     ascii[16] = '\0';
+    bool pTime = printTime;
+
+    if(printTime){ // Stop printing time
+        setTimePrint(false);
+    }
 
     for (i = 0; i < size; ++i) {
     	if ((i % 16) == 0) uartprintf(HEXDUMP_STR_PREFIX);
@@ -303,4 +330,12 @@ void uarthexdump(uint8_t *data, size_t size) {
             }
         }
     }
+
+    setTimePrint(pTime);
 }
+
+
+void setTimePrint(bool en){
+    printTime = en;
+}
+

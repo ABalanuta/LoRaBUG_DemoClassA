@@ -34,6 +34,8 @@ void toggleLed(PIN_Id pin);
 void hexdump(uint8_t *data, size_t size);
 void uarthexdump(uint8_t *data, size_t size);
 
+void setTimePrint(bool en);
+
 #ifdef __cplusplus
 }
 #endif
