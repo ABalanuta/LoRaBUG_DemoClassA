@@ -20,14 +20,17 @@
 
 #include "LoRaMac.h"
 
-
 time_t t;
-struct tm *ltm;
-char *curTime;
+
+char* getTimeStr(){
+
+    t = time(NULL);
+    t -= 4*3600; // -4h Eastern Time
+    return asctime(localtime(&t));
+}
+
 
 void print_clock(){
-    t = time(NULL);
-    ltm = localtime(&t);
-    curTime = asctime(ltm);
-    uartprintf("### Time(GMT): %s\r", curTime);
+    uartprintf("### Time(EST): %s\r", getTimeStr());
 }
+

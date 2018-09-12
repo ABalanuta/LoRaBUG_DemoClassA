@@ -11,6 +11,7 @@
 
 
 void print_clock();
+char* getTimeStr();
 
 
 #endif /* APP_CC_H_ */
