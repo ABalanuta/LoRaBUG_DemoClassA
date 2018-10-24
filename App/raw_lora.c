@@ -34,8 +34,8 @@ static void TxTimeout() {
     Event_post(events, EVENT_TXTIMEOUT);
 }
 static const RadioEvents_t RadioEventHandlers = {
-   .TxDone    = TxDone,
-   .TxTimeout = TxTimeout,
+                                                 .TxDone    = TxDone,
+                                                 .TxTimeout = TxTimeout,
 };
 
 
@@ -47,15 +47,15 @@ static const RadioEvents_t RadioEventHandlers = {
 
 #define TX_OUTPUT_POWER                             20         // dBm
 #define LORA_BANDWIDTH                              0         // [0: 125 kHz,
-                                                              //  1: 250 kHz,
-                                                              //  2: 500 kHz,
-                                                              //  3: Reserved]
+//  1: 250 kHz,
+//  2: 500 kHz,
+//  3: Reserved]
 
 #define LORA_SPREADING_FACTOR                       7         // [SF7..SF12]
 #define LORA_CODINGRATE                             1         // [1: 4/5,
-                                                              //  2: 4/6,
-                                                              //  3: 4/7,
-                                                              //  4: 4/8]
+//  2: 4/6,
+//  3: 4/7,
+//  4: 4/8]
 #define LORA_PREAMBLE_LENGTH                        8         // Same for Tx and Rx (uint16_t)
 #define LORA_SYMBOL_TIMEOUT                         5         // Symbols - Up to 1023 symbols (for RX)
 #define LORA_FIX_LENGTH_PAYLOAD_ON                  false
@@ -77,75 +77,77 @@ void raw_init(uint32_t freq){
 
 void raw_test(){
 
-    DisableLoraTask();
+    UInt key = Task_disable(); // Disables Task Scheduling
 
     Radio.Init((RadioEvents_t *)&RadioEventHandlers);
     Radio.SetPublicNetwork(true);
-    while(1){
-        for (int i = 0; i < 8; i++){
-            Radio.SetChannel(rf_ch_1[i]); // Must set channel before SetTxConfig
+    //while(1){
+    for (int i = 0; i < 8; i++){
+        Radio.SetChannel(rf_ch_1[i]); // Must set channel before SetTxConfig
 
-            Radio.SetTxConfig(MODEM_LORA,
-                              TX_OUTPUT_POWER,
-                              0, // Frequency Deviation (FSK only)
-                              LORA_BANDWIDTH,
-                              LORA_SPREADING_FACTOR,
-                              LORA_CODINGRATE,
-                              LORA_PREAMBLE_LENGTH,
-                              LORA_FIX_LENGTH_PAYLOAD_ON,
-                              CRC_ON,
-                              false, // FreqHopOn
-                              0,     // HopPeriod
-                              LORA_IQ_INVERSION_ON,
-                              TRANSMISSION_TIMEOUT);
-            for (int r = 0; r < 1; r++){
+        Radio.SetTxConfig(MODEM_LORA,
+                          TX_OUTPUT_POWER,
+                          0, // Frequency Deviation (FSK only)
+                          LORA_BANDWIDTH,
+                          LORA_SPREADING_FACTOR,
+                          LORA_CODINGRATE,
+                          LORA_PREAMBLE_LENGTH,
+                          LORA_FIX_LENGTH_PAYLOAD_ON,
+                          CRC_ON,
+                          false, // FreqHopOn
+                          0,     // HopPeriod
+                          LORA_IQ_INVERSION_ON,
+                          TRANSMISSION_TIMEOUT);
+        for (int r = 0; r < 1; r++){
 
-                setLed(Board_RLED, Board_LED_ON);
+            setLed(Board_RLED, Board_LED_ON);
 
-                Radio.Send((uint8_t *)msg, sizeof(msg)-1);
-//                UInt e = Event_pend(events, Event_Id_NONE, EVENT_TXDONE|EVENT_TXTIMEOUT, BIOS_WAIT_FOREVER);
-                Radio.Sleep();
+            Radio.Send((uint8_t *)msg, sizeof(msg)-1);
+            //                UInt e = Event_pend(events, Event_Id_NONE, EVENT_TXDONE|EVENT_TXTIMEOUT, BIOS_WAIT_FOREVER);
+            Radio.Sleep();
 
-//                switch (e) {
-//                case EVENT_TXDONE:
-//                    // Green
-//                    setLed(Board_RLED, Board_LED_OFF);
-//                    break;
-//                case EVENT_TXTIMEOUT:
-//                    setLed(Board_RLED, Board_LED_ON);
-//                    setLed(Board_GLED, Board_LED_ON);
-//                    Event_pend(events, Event_Id_NONE, Event_Id_NONE, BIOS_WAIT_FOREVER);
-//                    break;
-//                default:
-//                    break;
-//                }
+            //                switch (e) {
+            //                case EVENT_TXDONE:
+            //                    // Green
+            //                    setLed(Board_RLED, Board_LED_OFF);
+            //                    break;
+            //                case EVENT_TXTIMEOUT:
+            //                    setLed(Board_RLED, Board_LED_ON);
+            //                    setLed(Board_GLED, Board_LED_ON);
+            //                    Event_pend(events, Event_Id_NONE, Event_Id_NONE, BIOS_WAIT_FOREVER);
+            //                    break;
+            //                default:
+            //                    break;
+            //                }
 
-                DELAY_MS(500);
-                //setLed(Board_RLED, Board_LED_OFF);
-                //DELAY_MS(2000);
-            }
-            //DelayMs(2);
-            //UInt e = Event_pend(events, Event_Id_NONE, EVENT_TXDONE|EVENT_TXTIMEOUT, BIOS_WAIT_FOREVER);
-            //Radio.Sleep();
-
-    //        switch (e) {
-    //        case EVENT_TXDONE:
-    //            // Green
-    //            setLed(Board_RLED, Board_LED_OFF);
-    //            break;
-    //        case EVENT_TXTIMEOUT:
-    //            setLed(Board_RLED, Board_LED_ON);
-    //            setLed(Board_GLED, Board_LED_ON);
-    //            Event_pend(events, Event_Id_NONE, Event_Id_NONE, BIOS_WAIT_FOREVER);
-    //            break;
-    //        default:
-    //            break;
-    //        }
-
-            //DELAY_MS(200);
+            DELAY_MS(500);
+            //setLed(Board_RLED, Board_LED_OFF);
+            //DELAY_MS(2000);
         }
-        //Event_pend(events, Event_Id_NONE, Event_Id_NONE, BIOS_WAIT_FOREVER);
+        //DelayMs(2);
+        //UInt e = Event_pend(events, Event_Id_NONE, EVENT_TXDONE|EVENT_TXTIMEOUT, BIOS_WAIT_FOREVER);
+        //Radio.Sleep();
+
+        //        switch (e) {
+        //        case EVENT_TXDONE:
+        //            // Green
+        //            setLed(Board_RLED, Board_LED_OFF);
+        //            break;
+        //        case EVENT_TXTIMEOUT:
+        //            setLed(Board_RLED, Board_LED_ON);
+        //            setLed(Board_GLED, Board_LED_ON);
+        //            Event_pend(events, Event_Id_NONE, Event_Id_NONE, BIOS_WAIT_FOREVER);
+        //            break;
+        //        default:
+        //            break;
+        //        }
+
+        //DELAY_MS(200);
     }
+    //Event_pend(events, Event_Id_NONE, Event_Id_NONE, BIOS_WAIT_FOREVER);
+    //}
+
+    Task_restore(key); // Re-enables Task Scheduling
 }
 
 

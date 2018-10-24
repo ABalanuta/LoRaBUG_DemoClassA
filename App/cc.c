@@ -29,6 +29,13 @@ char* getTimeStr(){
     return asctime(localtime(&t));
 }
 
+char* getTimeStrFromSeconds(Uint32 secs){
+
+    t = (time_t)(secs);
+    t += 2208988800;
+    t -= 4*3600; // -4h Eastern Time
+    return asctime(localtime(&t));
+}
 
 void print_clock(){
     uartprintf("### Time(EST): %s\r", getTimeStr());

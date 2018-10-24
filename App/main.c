@@ -17,6 +17,8 @@
 #include <ti/drivers/UART.h>
 // #include <ti/drivers/Watchdog.h>
 
+#include <driverlib/sys_ctrl.h> // SysCtrlSystemReset()
+
 /* Board Header files */
 #include "Board_LoRaBUG.h"
 
@@ -56,7 +58,7 @@ static Event_Handle runtimeEvents;
  * Defines the application data transmission duty cycle. 15s, value in [ms].
  */
 //#define APP_TX_DUTYCYCLE                            60000
-volatile static Uint32 APP_TX_DUTYCYCLE = 60000;
+volatile static Uint32 APP_TX_DUTYCYCLE = 48*60*60*1000;
 
 /*!
  * Defines a random delay for application data transmission duty cycle. 2s,
@@ -177,7 +179,16 @@ struct ExperimentTest_s
     Uint32 DutyCycle;
     Uint8 CommandReceived;
 
+    Uint32 ExecTime;
+    Uint16 Nmessages;
+    Uint32 freq;
+    Uint16 bw;
+    Uint8 sf;
+    Uint8 payloadSize;
+
 }ExperimentTest;
+
+Int32 timeToExec = 0;
 
 
 /*!
@@ -455,6 +466,7 @@ static void McpsIndication( McpsIndication_t *mcpsIndication )
     // Check RxSlot
 
     UInt32 tempUInt32 = 0;
+    UInt16 tempUInt16 = 0;
 
 
     if( mcpsIndication->RxData == true )
@@ -493,9 +505,7 @@ static void McpsIndication( McpsIndication_t *mcpsIndication )
             memcpy(AppData + AppDataSize, &tempUInt32, sizeof(tempUInt32));
             AppDataSize += sizeof(tempUInt32);
 
-            AppPort = 200;
             NextTx = SendFrame( );
-            AppPort = LORAWAN_APP_PORT;
             break;
 
         // Received a ping must ack
@@ -514,9 +524,7 @@ static void McpsIndication( McpsIndication_t *mcpsIndication )
             memcpy(AppData + AppDataSize, &(mcpsIndication->Snr), 1);
             AppDataSize += 1;
 
-            AppPort = 200;
             NextTx = SendFrame( );
-            AppPort = LORAWAN_APP_PORT;
             break;
 
         // Change Update Rate
@@ -525,7 +533,7 @@ static void McpsIndication( McpsIndication_t *mcpsIndication )
             uartprintf("### UpdateRate is now %d seconds \r\n", tempUInt32);
 
             ExperimentTest.DutyCycle = tempUInt32 * 1000;
-            ExperimentTest.Running = true;
+            //ExperimentTest.Running = true;
             APP_TX_DUTYCYCLE = tempUInt32 * 1000;
 
             uartputs("### Sending Ack");
@@ -538,18 +546,78 @@ static void McpsIndication( McpsIndication_t *mcpsIndication )
             memcpy(AppData + AppDataSize, &tempUInt32, sizeof(tempUInt32));
             AppDataSize += sizeof(tempUInt32);
 
-            AppPort = 200;
             NextTx = SendFrame( );
 
             TxDutyCycleTime = APP_TX_DUTYCYCLE + randr( -APP_TX_DUTYCYCLE_RND, APP_TX_DUTYCYCLE_RND );
             DeviceState = DEVICE_STATE_CYCLE;
-
-            AppPort = LORAWAN_APP_PORT;
             break;
 
         // Device
         case 103:
             break;
+
+        // Receive Experiment Config
+        case 104:
+
+            if (mcpsIndication->BufferSize != 11) {
+                uartputs("### Invalid Config Size, Aborting ...");
+                break;
+            }
+
+            memcpy(&ExperimentTest.ExecTime, mcpsIndication->Buffer, sizeof(ExperimentTest.ExecTime));
+            memcpy(&ExperimentTest.Nmessages, mcpsIndication->Buffer + 4 , sizeof(ExperimentTest.Nmessages));
+            memcpy(&tempUInt16, mcpsIndication->Buffer + 6, sizeof(tempUInt16));
+
+            ExperimentTest.freq = 900000000 + (Uint32)(tempUInt16)*100000;
+            ExperimentTest.bw = *(mcpsIndication->Buffer + 8) * 25;
+            ExperimentTest.payloadSize = *(mcpsIndication->Buffer + 9);
+            ExperimentTest.sf = *(mcpsIndication->Buffer + 10);
+
+            uartputs(  "### Config Settings");
+            uartprintf("#### Experiment Starts at: %s\r", getTimeStrFromSeconds(ExperimentTest.ExecTime));
+            uartprintf("#### # Messages: %d\r\n",ExperimentTest.Nmessages);
+            uartprintf("#### PayloadSize: %d\r\n",ExperimentTest.payloadSize);
+            uartprintf("#### Freq: %d\r\n",ExperimentTest.freq);
+            uartprintf("#### BW: %d\r\n",ExperimentTest.bw);
+            uartprintf("#### SF: %d\r\n",ExperimentTest.sf);
+
+            ExperimentTest.Running = 0;
+
+            // Update Time to exec
+            if((ExperimentTest.ExecTime - Seconds_get()) > 0)
+                timeToExec = ExperimentTest.ExecTime - Seconds_get();
+
+            uartputs("### Sending Ack");
+            AppDataSize = 0;
+            ExperimentTest.CommandReceived = mcpsIndication->Port;
+            memset(AppData, '\0', sizeof(AppData));
+            memcpy(AppData + AppDataSize, &ExperimentTest.CommandReceived, sizeof(ExperimentTest.CommandReceived));
+            AppDataSize += sizeof(ExperimentTest.CommandReceived);
+
+            NextTx = SendFrame( );
+            break;
+
+        // Start Experiment
+        case 105:
+            uartputs("### Received Start Experiment Command");
+            uartprintf("#### Experiment Starts at: %s\r", getTimeStrFromSeconds(ExperimentTest.ExecTime));
+            uartprintf("#### Now is at: %s\r", getTimeStrFromSeconds(Seconds_get()));
+            ExperimentTest.Running = 1;
+
+//            tempUInt32 = ExperimentTest.ExecTime - Seconds_get();
+//
+//            while (tempUInt32 > 0){
+//                if (ExperimentTest.ExecTime - Seconds_get() != tempUInt32){
+//                    uartprintf("### Starting in %d Seconds \r\n", tempUInt32);
+//                    tempUInt32 = ExperimentTest.ExecTime - Seconds_get();
+//                }
+//            }
+
+            // Todo Execute the Onfig
+//            uartprintf("### Executing ...\r\n");
+            // TODO send ACK
+            break;
+
         default:
             break;
         }
@@ -730,7 +798,28 @@ void maintask(UArg arg0, UArg arg1)
 //                TimerLowPowerHandler( );
                 //Task_sleep(TIME_MS * 10);
                 //Task_yield();
-                Event_pend(runtimeEvents, Event_Id_NONE, EVENT_STATECHANGE, BIOS_WAIT_FOREVER);
+                //Event_pend(runtimeEvents, Event_Id_NONE, EVENT_STATECHANGE, BIOS_WAIT_FOREVER);
+                //timeToExec = ExperimentTest.ExecTime - Seconds_get();
+
+                //while (tempUInt32 > 0){
+                if ( ExperimentTest.Running ){
+
+                    if (timeToExec > 0) {
+                        if ( (ExperimentTest.ExecTime - Seconds_get()) < timeToExec) {
+                            uartprintf("### Starting in %d Seconds \r\n", (Int32)timeToExec);
+                            timeToExec = ExperimentTest.ExecTime - Seconds_get();
+                        }
+                    }
+                    else if(timeToExec == 0){
+                        uartprintf("Booom !!! \r\n");
+
+                        //TODO do Stuff
+
+                        // Then Reboot
+                        SysCtrlSystemReset();
+                    }
+
+                }
                 break;
             }
             default:
@@ -747,8 +836,6 @@ void maintask(UArg arg0, UArg arg1)
  *  ======== main ========
  */
 int main(void)
-
-
 {
     Task_Params taskParams;
 

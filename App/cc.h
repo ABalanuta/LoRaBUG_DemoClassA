@@ -12,6 +12,7 @@
 
 void print_clock();
 char* getTimeStr();
+char* getTimeStrFromSeconds(Uint32 secs);
 
 
 #endif /* APP_CC_H_ */
