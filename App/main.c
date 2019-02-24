@@ -38,6 +38,8 @@
 #include "cc.h" //command and control libraries
 #include "raw_lora.h"
 
+#include "driverlib/aon_wuc.h"
+
 
 
 #define TASKSTACKSIZE   2048
@@ -188,7 +190,8 @@ struct ExperimentTest_s
 
 }ExperimentTest;
 
-Int32 timeToExec = 0;
+static Int32 timeToExec = 0;
+static Int32 lastTime = -1;
 
 
 /*!
@@ -429,25 +432,22 @@ static void McpsIndication( McpsIndication_t *mcpsIndication )
     {
         case MCPS_UNCONFIRMED:
         {
-//            uartputs("# Got McpsIndication: MCPS_UNCONFIRMED");
+            uartputs("# Got McpsIndication: MCPS_UNCONFIRMED");
             break;
         }
         case MCPS_CONFIRMED:
         {
-//            uartputs("# Got McpsIndication: MCPS_CONFIRMED");
-
+            uartputs("# Got McpsIndication: MCPS_CONFIRMED");
             break;
         }
         case MCPS_PROPRIETARY:
         {
-//            uartputs("# Got McpsIndication: MCPS_PROPRIETARY");
+            uartputs("# Got McpsIndication: MCPS_PROPRIETARY");
             break;
-
-
         }
         case MCPS_MULTICAST:
         {
-//            uartputs("# Got McpsIndication: MCPS_MULTICAST");
+            uartputs("# Got McpsIndication: MCPS_MULTICAST");
             break;
 
         }
@@ -505,7 +505,9 @@ static void McpsIndication( McpsIndication_t *mcpsIndication )
             memcpy(AppData + AppDataSize, &tempUInt32, sizeof(tempUInt32));
             AppDataSize += sizeof(tempUInt32);
 
+
             NextTx = SendFrame( );
+
             break;
 
         // Received a ping must ack
@@ -604,19 +606,49 @@ static void McpsIndication( McpsIndication_t *mcpsIndication )
             uartprintf("#### Now is at: %s\r", getTimeStrFromSeconds(Seconds_get()));
             ExperimentTest.Running = 1;
 
-//            tempUInt32 = ExperimentTest.ExecTime - Seconds_get();
-//
-//            while (tempUInt32 > 0){
-//                if (ExperimentTest.ExecTime - Seconds_get() != tempUInt32){
-//                    uartprintf("### Starting in %d Seconds \r\n", tempUInt32);
-//                    tempUInt32 = ExperimentTest.ExecTime - Seconds_get();
-//                }
-//            }
+            uartputs("### Sending Ack");
+            AppDataSize = 0;
+            ExperimentTest.CommandReceived = mcpsIndication->Port;
+            memset(AppData, '\0', sizeof(AppData));
+            memcpy(AppData + AppDataSize, &ExperimentTest.CommandReceived, sizeof(ExperimentTest.CommandReceived));
+            AppDataSize += sizeof(ExperimentTest.CommandReceived);
 
-            // Todo Execute the Onfig
-//            uartprintf("### Executing ...\r\n");
-            // TODO send ACK
+            NextTx = SendFrame( );
             break;
+
+        // Cancel Experiment
+        case 106:
+            uartputs("### Received Cancel Experiment Command");
+            ExperimentTest.Running = 0;
+
+            uartputs("### Sending Ack");
+            AppDataSize = 0;
+            ExperimentTest.CommandReceived = mcpsIndication->Port;
+            memset(AppData, '\0', sizeof(AppData));
+            memcpy(AppData + AppDataSize, &ExperimentTest.CommandReceived, sizeof(ExperimentTest.CommandReceived));
+            AppDataSize += sizeof(ExperimentTest.CommandReceived);
+
+            NextTx = SendFrame( );
+            break;
+
+        // Reboot Device
+        case 107:
+            uartputs("### Received Cancel Experiment Command");
+            ExperimentTest.Running = 0;
+
+            uartputs("### Sending Ack");
+            AppDataSize = 0;
+            ExperimentTest.CommandReceived = mcpsIndication->Port;
+            memset(AppData, '\0', sizeof(AppData));
+            memcpy(AppData + AppDataSize, &ExperimentTest.CommandReceived, sizeof(ExperimentTest.CommandReceived));
+            AppDataSize += sizeof(ExperimentTest.CommandReceived);
+
+            NextTx = SendFrame( );
+
+            DelayMs(1000);
+            SysCtrlSystemReset();
+            break;
+
 
         default:
             break;
@@ -685,15 +717,15 @@ void maintask(UArg arg0, UArg arg1)
 
     BoardInitMcu( );
     BoardInitPeriph( );
-    //printf("# Board initialized\n");
     uartputs("# Board initialized");
 
     // Construct event for power efficient operation
     Event_construct(&runtimeEventsStruct, NULL);
     runtimeEvents = Event_handle(&runtimeEventsStruct);
 
-    //raw_init();
-    //raw_test();
+    // Todo Remove
+    ExperimentTest.Running = true;
+    ExperimentTest.ExecTime = Seconds_get() + 10;
 
     DeviceState = DEVICE_STATE_INIT;
 
@@ -802,20 +834,28 @@ void maintask(UArg arg0, UArg arg1)
                 //timeToExec = ExperimentTest.ExecTime - Seconds_get();
 
                 //while (tempUInt32 > 0){
+
                 if ( ExperimentTest.Running ){
 
-                    if (timeToExec > 0) {
-                        if ( (ExperimentTest.ExecTime - Seconds_get()) < timeToExec) {
-                            uartprintf("### Starting in %d Seconds \r\n", (Int32)timeToExec);
-                            timeToExec = ExperimentTest.ExecTime - Seconds_get();
-                        }
+                    timeToExec = ExperimentTest.ExecTime - Seconds_get();
+
+                    if (timeToExec > 0 && timeToExec != lastTime) {
+                        lastTime = timeToExec;
+                        uartprintf("### Starting in %d Seconds \r\n", (Int32)timeToExec);
                     }
-                    else if(timeToExec == 0){
+                    else if(timeToExec <= 0){
                         uartprintf("Booom !!! \r\n");
 
                         //TODO do Stuff
+                        raw_test();
+
+                        uartprintf("Done, Rebooting !!! \r\n");
 
                         // Then Reboot
+                        //HWREGBITW(AON_WUC_BASE+ AON_WUC_O_JTAGCFG, 0x08 ) = 0;//
+                        //```HWREG(AON_WUC_BASE + AON_WUC_O_JTAGCFG) = 0;```
+                        AONWUCJtagPowerOff();
+                        DelayMs(500);
                         SysCtrlSystemReset();
                     }
 

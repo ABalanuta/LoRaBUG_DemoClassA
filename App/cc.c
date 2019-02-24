@@ -25,7 +25,7 @@ time_t t;
 char* getTimeStr(){
 
     t = time(NULL);
-    t -= 4*3600; // -4h Eastern Time
+    t -= 5*3600; // -4h Eastern Time
     return asctime(localtime(&t));
 }
 
@@ -33,7 +33,7 @@ char* getTimeStrFromSeconds(Uint32 secs){
 
     t = (time_t)(secs);
     t += 2208988800;
-    t -= 4*3600; // -4h Eastern Time
+    t -= 5*3600; // -4h Eastern Time
     return asctime(localtime(&t));
 }
 
