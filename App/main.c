@@ -42,7 +42,7 @@
 
 
 
-#define TASKSTACKSIZE   2048
+#define TASKSTACKSIZE   2548
 
 Task_Struct task0Struct;
 Char task0Stack[TASKSTACKSIZE];
@@ -174,19 +174,29 @@ static enum eDeviceState
 
 
 
-struct ExperimentTest_s
+static struct ExperimentTest_s
 {
-    bool Running;
-    bool ClockInicialized;
+    Bool Running;
+    Bool ClockInicialized;
     Uint32 DutyCycle;
     Uint8 CommandReceived;
 
+    // Conf Msg1
     Uint32 ExecTime;
     Uint16 Nmessages;
     Uint32 freq;
     Uint16 bw;
     Uint8 sf;
     Uint8 payloadSize;
+
+    // Conf Msg2
+    Uint16 delay;
+    Uint8 preambleLen;
+    Uint8 cr;
+    Int8 pwr;
+    Bool crcOn;
+    Bool iqInverted;
+
 
 }ExperimentTest;
 
@@ -558,7 +568,7 @@ static void McpsIndication( McpsIndication_t *mcpsIndication )
         case 103:
             break;
 
-        // Receive Experiment Config
+        // Receive Experiment Config1
         case 104:
 
             if (mcpsIndication->BufferSize != 11) {
@@ -575,7 +585,7 @@ static void McpsIndication( McpsIndication_t *mcpsIndication )
             ExperimentTest.payloadSize = *(mcpsIndication->Buffer + 9);
             ExperimentTest.sf = *(mcpsIndication->Buffer + 10);
 
-            uartputs(  "### Config Settings");
+            uartputs(  "### Config1 Settings");
             uartprintf("#### Experiment Starts at: %s\r", getTimeStrFromSeconds(ExperimentTest.ExecTime));
             uartprintf("#### # Messages: %d\r\n",ExperimentTest.Nmessages);
             uartprintf("#### PayloadSize: %d\r\n",ExperimentTest.payloadSize);
@@ -649,6 +659,49 @@ static void McpsIndication( McpsIndication_t *mcpsIndication )
             SysCtrlSystemReset();
             break;
 
+        // Receive Experiment Config2
+        case 108:
+
+            if (mcpsIndication->BufferSize != 11) {
+                uartputs("### Invalid Config Size, Aborting ...");
+                break;
+            }
+
+//            memcpy(&ExperimentTest.ExecTime, mcpsIndication->Buffer, sizeof(ExperimentTest.ExecTime));
+//            memcpy(&ExperimentTest.Nmessages, mcpsIndication->Buffer + 4 , sizeof(ExperimentTest.Nmessages));
+
+
+            memcpy(&tempUInt16, mcpsIndication->Buffer, sizeof(tempUInt16));
+            ExperimentTest.delay = tempUInt16;
+            ExperimentTest.preambleLen = *(mcpsIndication->Buffer + 2);
+            ExperimentTest.cr = *(mcpsIndication->Buffer + 3);
+            ExperimentTest.pwr = *(mcpsIndication->Buffer + 4);
+            ExperimentTest.crcOn =  *(mcpsIndication->Buffer + 5) & 0b00000001;
+            ExperimentTest.iqInverted = (*(mcpsIndication->Buffer + 5) & 0b00000010) >> 1;
+
+            uartputs(  "### Config2 Settings");
+            uartprintf("#### Preamble Len: %d\r\n",ExperimentTest.preambleLen);
+            uartprintf("#### Delay: %d \r\n",ExperimentTest.delay);
+            uartprintf("#### CR: %d \r\n",ExperimentTest.cr);
+            uartprintf("#### TX Power : %d dBm\r\n",ExperimentTest.pwr);
+            uartprintf("#### Is crcOn: %s\r\n",ExperimentTest.crcOn ? "true" : "false");
+            uartprintf("#### Is iqInverted: %s\r\n",ExperimentTest.iqInverted ? "true" : "false");
+
+            ExperimentTest.Running = 0;
+
+            // Update Time to exec
+            if((ExperimentTest.ExecTime - Seconds_get()) > 0)
+                timeToExec = ExperimentTest.ExecTime - Seconds_get();
+
+            uartputs("### Sending Ack");
+            AppDataSize = 0;
+            ExperimentTest.CommandReceived = mcpsIndication->Port;
+            memset(AppData, '\0', sizeof(AppData));
+            memcpy(AppData + AppDataSize, &ExperimentTest.CommandReceived, sizeof(ExperimentTest.CommandReceived));
+            AppDataSize += sizeof(ExperimentTest.CommandReceived);
+
+            NextTx = SendFrame( );
+            break;
 
         default:
             break;
@@ -723,11 +776,25 @@ void maintask(UArg arg0, UArg arg1)
     Event_construct(&runtimeEventsStruct, NULL);
     runtimeEvents = Event_handle(&runtimeEventsStruct);
 
-    // Todo Remove
-    ExperimentTest.Running = true;
-    ExperimentTest.ExecTime = Seconds_get() + 10;
+
 
     DeviceState = DEVICE_STATE_INIT;
+
+    // Todo Remove
+//    ExperimentTest.Running = true;
+//    ExperimentTest.ExecTime = Seconds_get();
+//    ExperimentTest.Nmessages = 10;
+//    ExperimentTest.freq = 901500000;
+//    ExperimentTest.bw = 125;
+//    ExperimentTest.sf = 6;
+//    ExperimentTest.payloadSize = 255;
+//    ExperimentTest.delay = 100;
+//    ExperimentTest.preambleLen = 8;
+//    ExperimentTest.cr = 1;
+//    ExperimentTest.pwr = 0;
+//    ExperimentTest.crcOn = true;
+//    ExperimentTest.iqInverted = false;
+//    DeviceState = DEVICE_STATE_SLEEP;
 
     while( 1 )
     {
@@ -846,8 +913,22 @@ void maintask(UArg arg0, UArg arg1)
                     else if(timeToExec <= 0){
                         uartprintf("Booom !!! \r\n");
 
-                        //TODO do Stuff
-                        raw_test();
+                        TimerStop(&TxNextPacketTimer);
+                        DelayMs(1500);
+
+                        //raw_test();
+                        uartprintf("Booom Booom !!! \r\n");
+                        raw_lora_t(ExperimentTest.Nmessages,
+                                      ExperimentTest.freq,
+                                      ExperimentTest.bw,
+                                      ExperimentTest.sf,
+                                      ExperimentTest.payloadSize,
+                                      ExperimentTest.delay,
+                                      ExperimentTest.preambleLen,
+                                      ExperimentTest.cr,
+                                      ExperimentTest.pwr, // tx_power!,
+                                      ExperimentTest.crcOn,
+                                      ExperimentTest.iqInverted);
 
                         uartprintf("Done, Rebooting !!! \r\n");
 
